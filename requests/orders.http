@@ -1,0 +1,44 @@
+@host = http://localhost:8080
+@orderId = 00000000-0000-0000-0000-000000000000
+
+### Health
+GET {{host}}/health
+
+### Create order
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{
+  "customerEmail": "engineer@example.com",
+  "lines": [
+    {
+      "sku": "BOOK-001",
+      "productName": "Architecture Patterns",
+      "quantity": 1,
+      "unitPrice": 49.90
+    },
+    {
+      "sku": "MUG-001",
+      "productName": "Engineering Mug",
+      "quantity": 2,
+      "unitPrice": 18.50
+    }
+  ]
+}
+
+### Get order
+GET {{host}}/api/orders/{{orderId}}
+
+### Search confirmed orders
+GET {{host}}/api/orders?status=Confirmed&page=1&pageSize=20
+
+### Confirm order
+POST {{host}}/api/orders/{{orderId}}/confirm
+
+### Cancel order
+POST {{host}}/api/orders/{{orderId}}/cancel
+Content-Type: application/json
+
+{
+  "reason": "Customer requested cancellation"
+}

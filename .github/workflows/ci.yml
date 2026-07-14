@@ -1,0 +1,54 @@
+name: continuous integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: build, test and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Commerce.Cqrs.slnx
+
+      - name: Build
+        run: dotnet build Commerce.Cqrs.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: >-
+          dotnet test Commerce.Cqrs.slnx
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage
+          path: TestResults/**/coverage.cobertura.xml
+
+      - name: Build container
+        run: docker build --tag commerce-cqrs:${{ github.sha }} .
+
+      - name: Validate Bicep
+        uses: azure/CLI@v2
+        with:
+          inlineScript: az bicep build --file infra/main.bicep

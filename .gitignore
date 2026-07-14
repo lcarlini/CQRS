@@ -1,0 +1,42 @@
+## .NET build output
+bin/
+obj/
+artifacts/
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+
+## IDEs and user settings
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Local configuration and secrets
+appsettings.Local.json
+appsettings.*.local.json
+.env
+.env.*
+!.env.example
+secrets.json
+*.pfx
+*.snk
+
+## Infrastructure tooling
+.terraform/
+*.tfstate
+*.tfstate.*
+.azure/
+
+## OS files and logs
+.DS_Store
+Thumbs.db
+*.log
