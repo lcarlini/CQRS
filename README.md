@@ -7,7 +7,7 @@
 
 Production-minded order processing built with CQRS, ASP.NET Core, SQL Server, and Azure Service Bus. The project keeps the write model focused on business rules while a Dapper-based read model serves purpose-built queries.
 
-**New here?** Open the visual walkthrough: [docs/index.html](docs/index.html) — commands vs queries, order flows, and the layer map.
+**New here?** Open the visual walkthrough: [Commerce CQRS — How it works](https://lcarlini.github.io/CQRS/docs/) — commands vs queries, order flows, and the layer map.
 
 ## Why this project exists
 
