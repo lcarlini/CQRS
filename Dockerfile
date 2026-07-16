@@ -14,9 +14,8 @@ RUN dotnet publish src/Commerce.Cqrs.Api/Commerce.Cqrs.Api.csproj \
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
-RUN adduser --disabled-password --gecos "" --uid 10001 appuser
 COPY --from=build /app .
-USER appuser
+USER $APP_UID
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Commerce.Cqrs.Api.dll"]

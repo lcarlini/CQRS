@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Commerce CQRS — How it works</title>
+  <meta name="description" content="A visual walkthrough of CQRS in this order-processing project: commands, queries, outbox, and layers." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f1c1a;
+      --paper: #f3f0e8;
+      --mist: #e4e0d4;
+      --write: #c45c26;
+      --read: #1a6b5c;
+      --muted: #5c6764;
+      --line: #c9c4b6;
+      --glow: rgba(26, 107, 92, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "Instrument Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, var(--glow), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 0%, rgba(196, 92, 38, 0.1), transparent 50%),
+        linear-gradient(180deg, #f7f4ec 0%, var(--paper) 40%, #ebe6da 100%);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    a { color: var(--read); text-underline-offset: 3px; }
+    a:hover { color: var(--write); }
+
+    .wrap {
+      width: min(1080px, calc(100% - 2.5rem));
+      margin-inline: auto;
+    }
+
+    /* —— Hero —— */
+    header.hero {
+      padding: clamp(3rem, 8vw, 5.5rem) 0 clamp(2.5rem, 5vw, 3.5rem);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .brand {
+      font-family: "Newsreader", Georgia, serif;
+      font-size: clamp(2.75rem, 7vw, 4.25rem);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      animation: rise 0.8s ease-out both;
+    }
+
+    .brand em {
+      font-style: normal;
+      color: var(--read);
+    }
+
+    .lede {
+      margin-top: 1.1rem;
+      max-width: 34rem;
+      font-size: 1.125rem;
+      color: var(--muted);
+      animation: rise 0.8s 0.12s ease-out both;
+    }
+
+    .cta {
+      margin-top: 1.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      animation: rise 0.8s 0.22s ease-out both;
+    }
+
+    .cta a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.7rem 1.15rem;
+      border-radius: 2px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .cta a.primary {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .cta a.primary:hover {
+      background: var(--read);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .cta a.ghost {
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .cta a.ghost:hover {
+      border-color: var(--ink);
+      transform: translateY(-1px);
+    }
+
+    /* —— Split idea —— */
+    section {
+      padding: clamp(2.5rem, 5vw, 4rem) 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.65rem;
+    }
+
+    h2 {
+      font-family: "Newsreader", Georgia, serif;
+      font-size: clamp(1.75rem, 3.5vw, 2.35rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      max-width: 22ch;
+    }
+
+    .section-copy {
+      margin-top: 0.75rem;
+      max-width: 36rem;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .split {
+      margin-top: 2.25rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 720px) {
+      .split { grid-template-columns: 1fr; }
+    }
+
+    .lane {
+      padding: 1.5rem 1.4rem 1.6rem;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.45);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .lane:hover {
+      box-shadow: 0 12px 40px rgba(15, 28, 26, 0.06);
+    }
+
+    .lane.write { border-top: 3px solid var(--write); }
+    .lane.read { border-top: 3px solid var(--read); }
+
+    .lane h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+
+    .lane.write h3 { color: var(--write); }
+    .lane.read h3 { color: var(--read); }
+
+    .lane p {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .chip {
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 0.3rem 0.65rem;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .lane.write .chip { border-color: color-mix(in srgb, var(--write) 35%, var(--line)); }
+    .lane.read .chip { border-color: color-mix(in srgb, var(--read) 35%, var(--line)); }
+
+    /* —— Flow —— */
+    .flow {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 3.5rem 1fr;
+      gap: 1rem;
+      align-items: start;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .flow-row.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    .flow-num {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      background: var(--ink);
+      color: var(--paper);
+      position: relative;
+      z-index: 1;
+    }
+
+    .flow-row.write .flow-num { background: var(--write); }
+    .flow-row.read .flow-num { background: var(--read); }
+
+    .flow-body {
+      padding: 0.35rem 0 1.75rem;
+      border-left: 1px dashed transparent;
+      margin-left: -2.75rem;
+      padding-left: 3.75rem;
+      position: relative;
+    }
+
+    .flow-row:not(:last-child) .flow-body::before {
+      content: "";
+      position: absolute;
+      left: 1.2rem;
+      top: 2.5rem;
+      bottom: 0;
+      width: 1px;
+      background: var(--line);
+    }
+
+    .flow-body strong {
+      display: block;
+      font-size: 1.05rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .flow-body span {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .code {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.85rem;
+      background: var(--mist);
+      padding: 0.15rem 0.4rem;
+      border-radius: 2px;
+      color: var(--ink);
+    }
+
+    /* —— Layers —— */
+    .layers {
+      margin-top: 2rem;
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 9rem 1fr;
+      gap: 1rem;
+      align-items: center;
+      padding: 1rem 1.2rem;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid var(--line);
+      border-left-width: 4px;
+      transition: transform 0.2s ease;
+    }
+
+    .layer:hover { transform: translateX(4px); }
+
+    .layer:nth-child(1) { border-left-color: #2a3f3a; }
+    .layer:nth-child(2) { border-left-color: var(--read); }
+    .layer:nth-child(3) { border-left-color: var(--write); }
+    .layer:nth-child(4) { border-left-color: #8a7a5c; }
+
+    .layer dt {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .layer dd {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 560px) {
+      .layer { grid-template-columns: 1fr; gap: 0.25rem; }
+    }
+
+    /* —— Lifecycle SVG —— */
+    .diagram {
+      margin-top: 2rem;
+      padding: 1.75rem 1.25rem;
+      background: var(--ink);
+      color: #d8e0dc;
+      overflow-x: auto;
+    }
+
+    .diagram svg {
+      display: block;
+      width: 100%;
+      min-width: 520px;
+      height: auto;
+    }
+
+    .diagram .caption {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #8fa09a;
+      max-width: 40rem;
+    }
+
+    /* —— Footer —— */
+    footer {
+      padding: 2.5rem 0 3rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+      .flow-row { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <p class="brand">Commerce <em>CQRS</em></p>
+      <p class="lede">
+        One codebase, two highways: commands change state; queries only read it.
+        This page walks through how that split works in this order service.
+      </p>
+      <div class="cta">
+        <a class="primary" href="../README.md">Back to README</a>
+        <a class="ghost" href="#flows">See the flows</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="idea">
+      <div class="wrap">
+        <p class="section-label">The idea</p>
+        <h2>Write and read are different jobs</h2>
+        <p class="section-copy">
+          CQRS (Command Query Responsibility Segregation) keeps mutating the domain
+          separate from answering questions. Same SQL database here — different code paths,
+          models, and tools.
+        </p>
+
+        <div class="split">
+          <article class="lane write">
+            <h3>Commands → change</h3>
+            <p>Load the Order aggregate, enforce rules, persist with EF Core, raise domain events into the outbox.</p>
+            <div class="chips">
+              <span class="chip">CreateOrder</span>
+              <span class="chip">ConfirmOrder</span>
+              <span class="chip">CancelOrder</span>
+              <span class="chip">EF Core</span>
+            </div>
+          </article>
+          <article class="lane read">
+            <h3>Queries → answer</h3>
+            <p>Skip the aggregate. Run purpose-built SQL with Dapper and return lean DTOs for the UI or API client.</p>
+            <div class="chips">
+              <span class="chip">GetOrder</span>
+              <span class="chip">SearchOrders</span>
+              <span class="chip">Dapper</span>
+              <span class="chip">OrderDetails</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="flows">
+      <div class="wrap">
+        <p class="section-label">Write path</p>
+        <h2>Creating an order</h2>
+        <p class="section-copy">
+          <span class="code">POST /api/orders</span> goes through the command handler,
+          the domain, a single SQL transaction, then the outbox worker publishes to Service Bus.
+        </p>
+
+        <div class="flow" data-flow>
+          <div class="flow-row write">
+            <div class="flow-num">1</div>
+            <div class="flow-body">
+              <strong>API receives the command</strong>
+              <span>Minimal API maps JSON to <span class="code">CreateOrder</span> and calls <span class="code">ICommandHandler</span>.</span>
+            </div>
+          </div>
+          <div class="flow-row write">
+            <div class="flow-num">2</div>
+            <div class="flow-body">
+              <strong>Domain builds the aggregate</strong>
+              <span><span class="code">Order.Create</span> validates email, lines, prices — and raises <span class="code">OrderCreated</span>.</span>
+            </div>
+          </div>
+          <div class="flow-row write">
+            <div class="flow-num">3</div>
+            <div class="flow-body">
+              <strong>One transaction commits</strong>
+              <span>EF Core saves the order and an outbox row together. No “event without order.”</span>
+            </div>
+          </div>
+          <div class="flow-row write">
+            <div class="flow-num">4</div>
+            <div class="flow-body">
+              <strong>Outbox worker publishes</strong>
+              <span>Background service polls pending messages and sends them to Azure Service Bus.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="read-flow">
+      <div class="wrap">
+        <p class="section-label">Read path</p>
+        <h2>Fetching an order</h2>
+        <p class="section-copy">
+          <span class="code">GET /api/orders/{id}</span> never hydrates the aggregate.
+          The query handler asks the Dapper read store for a shaped DTO.
+        </p>
+
+        <div class="flow" data-flow>
+          <div class="flow-row read">
+            <div class="flow-num">1</div>
+            <div class="flow-body">
+              <strong>API receives the query</strong>
+              <span><span class="code">GetOrder</span> is handled by <span class="code">IQueryHandler</span> — no write repository involved.</span>
+            </div>
+          </div>
+          <div class="flow-row read">
+            <div class="flow-num">2</div>
+            <div class="flow-body">
+              <strong>Dapper runs focused SQL</strong>
+              <span><span class="code">SqlOrderReadStore</span> selects order + lines; totals come from SQL.</span>
+            </div>
+          </div>
+          <div class="flow-row read">
+            <div class="flow-num">3</div>
+            <div class="flow-body">
+              <strong>DTO goes back to the client</strong>
+              <span><span class="code">OrderDetails</span> or 404 — optimized for reading, not for enforcing invariants.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="lifecycle">
+      <div class="wrap">
+        <p class="section-label">Lifecycle</p>
+        <h2>Draft → confirmed or cancelled</h2>
+        <p class="section-copy">
+          Status rules live in the domain. Confirm only from Draft; cancel needs a reason and cannot run twice.
+        </p>
+
+        <div class="diagram" aria-hidden="true">
+          <svg viewBox="0 0 720 180" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#8fa09a" />
+              </marker>
+            </defs>
+            <rect x="40" y="40" width="140" height="56" rx="2" fill="#1e332f" stroke="#3d5c54" />
+            <text x="110" y="74" text-anchor="middle" fill="#f3f0e8" font-family="Instrument Sans, sans-serif" font-size="16" font-weight="600">Draft</text>
+
+            <line x1="180" y1="68" x2="260" y2="68" stroke="#8fa09a" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="220" y="58" text-anchor="middle" fill="#c45c26" font-family="Instrument Sans, sans-serif" font-size="11" font-weight="600">Confirm</text>
+
+            <rect x="268" y="40" width="140" height="56" rx="2" fill="#1a6b5c" stroke="#2a9a86" />
+            <text x="338" y="74" text-anchor="middle" fill="#f3f0e8" font-family="Instrument Sans, sans-serif" font-size="16" font-weight="600">Confirmed</text>
+
+            <line x1="408" y1="68" x2="512" y2="68" stroke="#8fa09a" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="460" y="58" text-anchor="middle" fill="#c45c26" font-family="Instrument Sans, sans-serif" font-size="11" font-weight="600">Cancel</text>
+
+            <rect x="520" y="40" width="140" height="56" rx="2" fill="#3a2a22" stroke="#6b4a3a" />
+            <text x="590" y="74" text-anchor="middle" fill="#f3f0e8" font-family="Instrument Sans, sans-serif" font-size="16" font-weight="600">Cancelled</text>
+
+            <path d="M110 96 L110 140 L590 140 L590 96" fill="none" stroke="#8fa09a" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="350" y="160" text-anchor="middle" fill="#c45c26" font-family="Instrument Sans, sans-serif" font-size="11" font-weight="600">Cancel from Draft (reason required)</text>
+          </svg>
+          <p class="caption">
+            Confirm only from Draft. Cancel needs a reason and works from Draft or Confirmed — never twice.
+            Events <em>OrderCreated</em>, <em>OrderConfirmed</em>, and <em>OrderCancelled</em> leave via the outbox.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="layers">
+      <div class="wrap">
+        <p class="section-label">Structure</p>
+        <h2>Dependencies point inward</h2>
+        <p class="section-copy">
+          Not event sourcing — SQL is the source of truth. Events are integration signals after a successful commit.
+        </p>
+
+        <dl class="layers">
+          <div class="layer">
+            <dt>Api</dt>
+            <dd>HTTP endpoints, health, OpenTelemetry, ProblemDetails</dd>
+          </div>
+          <div class="layer">
+            <dt>Application</dt>
+            <dd>Commands, queries, handlers, and ports (interfaces)</dd>
+          </div>
+          <div class="layer">
+            <dt>Domain</dt>
+            <dd>Order aggregate, invariants, domain events — no infrastructure</dd>
+          </div>
+          <div class="layer">
+            <dt>Infrastructure</dt>
+            <dd>EF Core writes, Dapper reads, outbox publisher, Service Bus</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <p>Part of the <a href="../README.md">Commerce CQRS</a> reference project.</p>
+    <p><a href="https://github.com/lcarlini/CQRS">GitHub</a></p>
+  </footer>
+
+  <script>
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduce) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              const rows = e.target.querySelectorAll(".flow-row");
+              rows.forEach((row, i) => {
+                setTimeout(() => row.classList.add("visible"), i * 120);
+              });
+              io.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.2 }
+      );
+      document.querySelectorAll("[data-flow]").forEach((el) => io.observe(el));
+    } else {
+      document.querySelectorAll(".flow-row").forEach((r) => r.classList.add("visible"));
+    }
+  </script>
+</body>
+</html>
